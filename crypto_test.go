@@ -1,0 +1,17 @@
+package archiver
+
+import (
+	"reflect"
+	"testing"
+)
+
+func TestCrypto(t *testing.T) {
+	privateKey := "MIICWwIBAAKBgQC/feA9H71ak0hwXvltAn0+hkELPkqxvQKP6Q4auTVpFv8UNj97KpWutyrxeNKz8KAjb0V/E227WjOurgwZw+oN5rRzsckrvGhD8RIayINvPCscpW2lqUoLvqknl46DR/7lQP9qMJCY6nBZ7mmmw7wh04awdKK36SUUUMc+A0cPawIDAQABAoGAGmqyEZycUa950c64WBp8zrBUrslkIorxnIrJIFSmkp3SiKZHMaWZSqYILZG+d4ZdgSXrj3FNtQfnk1R9ZNyLICyqjRZ0sPVXTijzttqRqTS0VZyLgRP7Crc3feJlAxdzhyq8kqeoEUhsK4mnZ9I+D9lCgsMtlfLK0+pwmKA74CkCQQDnZHruvjvigkz0gMB0EfR7G8lcYSTbzAyTS5nzhVmQYRw3lUoj5fjgWPqXdS5VKGA4Zte8G7Ihfyyuw/jCv9fdAkEA09se7lCjSQdrYlZK1VIVhBwWLxvN3RcxI4tkpKli5r543kToWLOL1i0erBKkKTUm2le2WsseHtZyHbyfIU9z5wJAH7zTc72Z/yZ6IasrOoBf9SbJhqc4ZAFn1CgxdIpcz4XSVflfEu9vJG5v6KhE8583G2VXv9BYrWmBGnN8wlGH7QJAbJmHuox1l4sJHgi0JbQFOYqYSJ/NIMextdHPzqTSAQyksvPJ0yZ+yVSpw3Vu13zapNSPsu0qTI6LQvkc7ZtoAwJATZNuQuAhJXqb4gjVU14dGwvDxsqAu/0/Xj1eHP+C9msbFry7OUSCkyMZ4qQ4xz9w4sbzn51Tio0pgei9k0Bfcg=="
+	publicKey := "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC/feA9H71ak0hwXvltAn0+hkELPkqxvQKP6Q4auTVpFv8UNj97KpWutyrxeNKz8KAjb0V/E227WjOurgwZw+oN5rRzsckrvGhD8RIayINvPCscpW2lqUoLvqknl46DR/7lQP9qMJCY6nBZ7mmmw7wh04awdKK36SUUUMc+A0cPawIDAQAB"
+
+	message := []byte("Blergh!")
+	cipherText := Encrypt(publicKey, message)
+	if !reflect.DeepEqual(message, Decrypt(privateKey, cipherText)) {
+		t.Error("Decryption process failed.")
+	}
+}
