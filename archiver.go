@@ -16,10 +16,10 @@ type flags struct {
 	Key     string
 	Keygen  bool
 	Force   bool
+	Dryrun  bool
 	Output  string
 	Decrypt string
 	Warn    int
-	// Sources []string
 }
 
 // Warnings logs warnings that might prevent failed archivation.

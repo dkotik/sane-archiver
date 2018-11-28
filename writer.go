@@ -37,7 +37,7 @@ func NewWriter(target string, base64PublicKey string) *SaneWriter {
 	w := SaneWriter{output: target}
 	w.nonce = make([]byte, aes.BlockSize)
 	rand.Read(w.nonce)
-	target = fmt.Sprintf("%s%c%s~%x.tmp",
+	target = fmt.Sprintf("/tmp/%s%c%s~%x.tmp",
 		path.Dir(target), os.PathSeparator, time.Now().Format("2006-01-31"), w.nonce)
 	w.fileHandle = WriteHandle(target)
 
@@ -61,14 +61,60 @@ func NewWriter(target string, base64PublicKey string) *SaneWriter {
 	return &w
 }
 
+// func (w *SaneWriter) gitFirstThenRemaining(target string) ([]string, error) {
+// 	nongit := make([]string, 0)
+// 	err := filepath.Walk(target,
+// 		func(file string, info os.FileInfo, err error) error {
+// 			if err == nil && info != nil && info.IsDir() {
+// 				if l, lerr := GitBranchList(file); lerr == nil {
+// 					log.Println(`detected git repository at`, file, l)
+// 					for _, branch := range l {
+// 						cmd, r, gw := GitArchiveReader(file, branch)
+// 						go func() {
+// 							cmd.Run()
+// 							gw.Close()
+// 						}()
+// 						if err = w.addReader(strings.TrimSuffix(file, `.git`)+`-`+branch+`.tar`, &r); err != nil {
+// 							log.Printf("Git repository <%s> could not be accessed.", file)
+// 							return err
+// 						}
+// 						return nil
+// 					}
+// 				} else {
+// 					nongit = append(nongit, file)
+// 				}
+// 			}
+// 			return err
+// 		})
+// 		return nongit, err
+// }
+
 // Walk adds files listed in target path to archive.
 func (w *SaneWriter) Walk(target string) {
+	// if nongit, err := w.gitFirstThenRemaining(target); err == nil {}
 	err := filepath.Walk(target,
 		func(file string, info os.FileInfo, err error) error {
 			if err != nil {
 				log.Printf("Path <%s> could not be accessed.", target)
 				return err
-			} else if !info.IsDir() {
+			} else if info.IsDir() {
+				if l, err := GitBranchList(file); err == nil {
+					log.Println(`detected git repository at`, file, l)
+					for _, branch := range l {
+						cmd, r, gw := GitArchiveReader(file, branch)
+						go func() {
+							cmd.Run()
+							gw.Close()
+						}()
+						if err := w.addReader(strings.TrimSuffix(file, `.git`)+`-`+branch+`.tar`, &r); err != nil {
+							log.Printf("Git repository <%s> could not be accessed.", file)
+							return err
+						}
+						// return nil
+					}
+					return filepath.SkipDir
+				}
+			} else {
 				if err := w.addFile(file); err != nil {
 					log.Printf("File <%s> could not be accessed.", target)
 					return err
@@ -77,12 +123,12 @@ func (w *SaneWriter) Walk(target string) {
 			return nil
 		})
 	if err != nil {
-		log.Printf("Directory <%s> could not be accessed.", target)
+		log.Printf("Directory <%s> could not be fully processed.", target)
 	}
 }
 
 func (w *SaneWriter) addFile(target string) error {
-	in, err := os.OpenFile(target, os.O_RDONLY, 0755)
+	in, err := os.Open(target)
 	if err != nil {
 		return err
 	}
@@ -107,6 +153,20 @@ func (w *SaneWriter) addFile(target string) error {
 	}
 	w.size += uint64(n)
 	log.Printf("File <%s> was added.", target)
+	return nil
+}
+
+func (w *SaneWriter) addReader(name string, target *io.Reader) error {
+	f, err := w.archiveHandle.Create(name)
+	if err != nil {
+		return err
+	}
+	n, err := io.Copy(f, *target)
+	if err != nil {
+		return err
+	}
+	w.size += uint64(n)
+	log.Printf("File <%s> was added.", name)
 	return nil
 }
 

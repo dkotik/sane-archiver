@@ -1,5 +1,6 @@
-// https://cyberspy.io/articles/crypto101/
 package archiver
+
+// https://cyberspy.io/articles/crypto101/
 
 import (
 	"crypto/aes"

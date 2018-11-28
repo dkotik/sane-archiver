@@ -27,6 +27,7 @@ Options:
  -d, --decrypt      Decrypt this file using the key.
  -f, --force        Overwrite any files that already exist.
  -w, --warn <GB>    Warn if the disk is running low on space.
+ -n, --dry-run		Display operations without writing.
  -h, --help         Print this message.
 
  Defaults:
@@ -87,6 +88,7 @@ func main() {
 		`Set private or public base64-encoded key ($ENV[SaneArchiverPublicKey] is default).`)
 	CLI.PersistentFlags().BoolVar(&flags.Keygen, `keygen`, false, `Generate a base64-encoded keypair.`)
 	CLI.PersistentFlags().StringVarP(&flags.Decrypt, `decrypt`, `d`, ``, `Decrypt this file using the key.`)
+	CLI.PersistentFlags().BoolVarP(&flags.Dryrun, `dry-run`, `n`, false, `Display operations without writing.`)
 	CLI.PersistentFlags().BoolVarP(&flags.Force, `force`, `f`, false, `Overwrite any files that already exist.`)
 	CLI.PersistentFlags().StringVarP(&flags.Output, `output`, `o`,
 		`{year}-{month}-{day}-{md5}.sane1`, `Output to target file or path ({year}-{month}-{day}-{md5}.sane1 is default).`)

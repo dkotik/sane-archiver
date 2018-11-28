@@ -49,6 +49,8 @@ sane-archiver --key [PUBLICKEY] [FILE|DIRECTORY] 2>>&1 | tee report.log | mail -
 sane-archiver --key [PUBLICKEY] [FILE|DIRECTORY] 2>>report.log && aws s3 [DIRECTORY] sync s3://bucket...
 ```
 
+**Pro tip:** If you type one space character before running a terminal command, that command will not be recorded in bash history. This can help protect your keys from prying eyes.
+
 Features
 --------
 
@@ -58,6 +60,9 @@ Features
     ends up in the hands of a malicious actor, it will be difficult to determine
     how the file was created just by looking at its contents or its size. Do not forget to change
     the default file-naming scheme by using `--output {hash}.extension` command line argument.
+
+*   **Git Archive Support**. Sane Archiver detects folders that contain Git repositories and archives
+    all Git branches as separate *.tar balls. (Requires Git to be installed on the machine!)
 
 *   **Includes MD5 Hash In Output**. By default, generated files include MD5 hash in their name.
     Thus, checking for bit-rot errors is as trivial as running `md5sum .`
@@ -70,6 +75,8 @@ Features
 TODO
 ----
 
+- Implement dry-run capability.
+- Check that keys work before writing anything on disk.
 - Add support for Windows and MacOS.
 - Provide test data and write a beefier test suite.
 - Display progress percentage when running through files.

@@ -1,7 +1,8 @@
 default:
-	cd cmd/sane-archiver && \
-	go test && \
-	go run .
+	go test
+	# cd cmd/sane-archiver && \
+	# go test && \
+	# go run .
 linux:
 	export GOOS=linux; \
 	export GOARCH=amd64; \
