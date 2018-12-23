@@ -5,28 +5,40 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
+	"path"
 
-	"sane-archiver"
+	archiver "sane-archiver"
 
 	"github.com/spf13/cobra"
 )
 
-const usage = `Sane Archiver 0.0.6 Alpha
+const basicHelp = `Sane Archiver 0.0.9 Alpha
+
+Basic:
+  sane-archiver --keygen
+  sane-archiver --key [PUBLICKEY] [FILE|DIRECTORY]... [OPTION]...
+  sane-archiver --key [PRIVATEKEY] --decrypt [SANEFILE]...
+  sane-archiver --help
+`
+
+const fullHelp = `Sane Archiver 0.0.9 Alpha
 A simple command line utility for making encrypted archives.
 
 Usage:
   sane-archiver --keygen
   sane-archiver --key [PUBLICKEY] [FILE|DIRECTORY]... [OPTION]...
-  sane-archiver --key [PRIVATEKEY] --decrypt [SANEFILE]
+  sane-archiver --key [PRIVATEKEY] --decrypt [SANEFILE]...
+  sane-archiver --help
 
 Options:
  -k, --key <KEY>    Set private or public base64-encoded key.
      --keygen       Generate a base64-encoded keypair.
  -o, --output       Output to this file or path.
- -d, --decrypt      Decrypt this file using the key.
+ -d, --decrypt      Decrypt all provided files.
+ -u, --upload       Upload finished archive to the cloud.
  -f, --force        Overwrite any files that already exist.
  -w, --warn <GB>    Warn if the disk is running low on space.
+ -m, --master-only	Archive only master branches of git repositories.
  -n, --dry-run		Display operations without writing.
  -h, --help         Print this message.
 
@@ -41,7 +53,7 @@ var flags = &archiver.Flags
 // CLI cobra boiler plate.
 var CLI = &cobra.Command{
 	Use:     `sane-archiver`,
-	Version: `0.0.6 Alpha`,
+	Version: `0.0.9 Alpha`,
 	Short:   `Sane Archiver: A simple command line utility for making encrypted archives.`,
 	// Long: `Longer description..
 	//         feel free to use a few lines here.
@@ -59,24 +71,43 @@ var CLI = &cobra.Command{
 		if flags.Keygen {
 			private, public := archiver.GenerateKeyPair()
 			fmt.Printf("Private key: %s\nPublic key: %s\n", private, public)
-		} else if flags.Decrypt != "" {
-			if !strings.HasSuffix(flags.Output, `.zip`) {
-				flags.Output = strings.TrimSuffix(flags.Output, `.sane1`) + `.zip`
+		} else if len(args) == 0 {
+			fmt.Print(basicHelp)
+			return
+		} else if flags.Decrypt {
+			if flags.Output == `{year}-{month}-{day}-{md5}.sane1` {
+				flags.Output = `.`
+			} else {
+				info, err := os.Stat(flags.Output)
+				if err != nil || (err == nil && !info.IsDir()) {
+					log.Fatalf(`Output location used for decryption <%s> must be a writable directory.`, flags.Output)
+				}
 			}
-			err := archiver.Decode(flags.Decrypt, flags.Key)
-			if err != nil {
-				log.Printf("Could not decrypt file <%s>. Reason: <%s>.", flags.Decrypt, err.Error())
-			}
-			flags.Warnings()
-		} else if len(args) > 0 {
-			w := archiver.NewWriter(flags.Output, flags.Key)
-			defer w.Close()
 			for _, arg := range args {
-				w.Walk(arg)
+				err := archiver.Decode(path.Join(flags.Output, arg+`.zip`), arg, archiver.ConfirmKey())
+				if err != nil {
+					log.Printf("Could not decrypt file <%s>. Reason: <%s>.", arg, err.Error())
+				}
 			}
 			flags.Warnings()
 		} else {
-			cmd.Help()
+			w := &archiver.SaneWriter{Output: flags.Output}
+			defer func() {
+				w.Close()
+				flags.Warnings()
+				if flags.Upload != `` {
+					log.Println(`Attemping to upload result...`)
+					err := archiver.UploadS3(w.Result, flags.Upload)
+					if err != nil {
+						log.Printf(`Error uploading %s: %s.`, w.Result, err.Error())
+					}
+				}
+			}()
+			for _, arg := range args {
+				walker := archiver.SaneDirectoryWalker(arg)
+				// w.Walk(arg)
+				walker.Walk(w)
+			}
 		}
 	},
 }
@@ -87,14 +118,17 @@ func main() {
 	CLI.PersistentFlags().StringVarP(&flags.Key, `key`, `k`, os.Getenv("SaneArchiverPublicKey"),
 		`Set private or public base64-encoded key ($ENV[SaneArchiverPublicKey] is default).`)
 	CLI.PersistentFlags().BoolVar(&flags.Keygen, `keygen`, false, `Generate a base64-encoded keypair.`)
-	CLI.PersistentFlags().StringVarP(&flags.Decrypt, `decrypt`, `d`, ``, `Decrypt this file using the key.`)
+	CLI.PersistentFlags().BoolVarP(&flags.Decrypt, `decrypt`, `d`, false, `Decrypt this file using the key.`)
 	CLI.PersistentFlags().BoolVarP(&flags.Dryrun, `dry-run`, `n`, false, `Display operations without writing.`)
 	CLI.PersistentFlags().BoolVarP(&flags.Force, `force`, `f`, false, `Overwrite any files that already exist.`)
+	CLI.PersistentFlags().StringVarP(&flags.Upload, `upload`, `u`,
+		``, `Upload finished archive to the cloud.`)
 	CLI.PersistentFlags().StringVarP(&flags.Output, `output`, `o`,
 		`{year}-{month}-{day}-{md5}.sane1`, `Output to target file or path ({year}-{month}-{day}-{md5}.sane1 is default).`)
 	CLI.PersistentFlags().IntVarP(&flags.Warn, `warn`, `w`, 2,
 		`Warn if the disk is running low on space (default is 2, issuing a warning under 2GB of free space).`)
-	CLI.MarkFlagRequired(`key`)
-	CLI.SetHelpTemplate(usage)
+	CLI.PersistentFlags().BoolVarP(&flags.Master, `master-only`, `m`, false, `Archive only master branches of git repositories.`)
+	// CLI.MarkFlagRequired(`key`)
+	CLI.SetHelpTemplate(fullHelp)
 	CLI.Execute()
 }

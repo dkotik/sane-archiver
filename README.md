@@ -24,16 +24,19 @@ Usage
 ```bash
 sane-archiver --keygen
 sane-archiver --key [PUBLICKEY] [FILE|DIRECTORY]... [OPTION]...
-sane-archiver --key [PRIVATEKEY] --decrypt [SANEFILE]
+sane-archiver --key [PRIVATEKEY] --decrypt [SANEFILE]...
+sane-archiver --help
 ```
 
     Options:
      -k, --key <KEY>    Set private or public base64-encoded key.
          --keygen       Generate a base64-encoded keypair.
      -o, --output       Output to this file or path.
-     -d, --decrypt      Decrypt this file using the key.
+     -d, --decrypt      Decrypt all provided files.
      -f, --force        Overwrite any files that already exist.
      -w, --warn <GB>    Warn if the disk is running low on space.
+     -m, --master-only	Archive only master branches of git repositories.
+     -n, --dry-run		Display operations without writing.
      -h, --help         Print this message.
 
      Defaults:
@@ -54,20 +57,24 @@ sane-archiver --key [PUBLICKEY] [FILE|DIRECTORY] 2>>report.log && aws s3 [DIRECT
 Features
 --------
 
-*   **No Artifacts**. Sane Archiver produces files that appear to contain entirely
+*   **No Artifacts**. Archiver produces files that appear to contain entirely
     random-generated data without any markings or artifacts. Stream cipher is used to
     encrypt the containing data. If a produced archive file
     ends up in the hands of a malicious actor, it will be difficult to determine
     how the file was created just by looking at its contents or its size. Do not forget to change
     the default file-naming scheme by using `--output {hash}.extension` command line argument.
 
-*   **Git Archive Support**. Sane Archiver detects folders that contain Git repositories and archives
+*   **Git Archive Support**. Archiver detects folders that contain Git repositories and archives
     all Git branches as separate *.tar balls. (Requires Git to be installed on the machine!)
+
+*   **S3 Upload**. Archiver can attempt to upload the resulting file to AWS S3 upon completion.
+    Use `--upload s3://<credentialID>:<credentialSecret>@<awsRegion>/<bucket>/<path>` parameter.
+    Note that the local copy of the file will be retained. You can protect your disk from filling up by accident by setting `--output /tmp/{hash}.tmp`.
 
 *   **Includes MD5 Hash In Output**. By default, generated files include MD5 hash in their name.
     Thus, checking for bit-rot errors is as trivial as running `md5sum .`
 
-*   **File System Warnings**. Sane Archiver will print a warning if the target file system
+*   **File System Warnings**. Archiver will print a warning if the target file system
     is running low on available storage space. By default, the warning is printed when there
     are less than 2GB of space remains. You can change the warning threshold by passing
     `--warn [INTEGER]` as a command line argument.
@@ -75,8 +82,11 @@ Features
 TODO
 ----
 
-- Implement dry-run capability.
-- Check that keys work before writing anything on disk.
-- Add support for Windows and MacOS.
+- Checksum --md5 command.
+- Support git sub-modules for archiving. Currently they are ignored.
+- [Stash git changes](https://stackoverflow.com/questions/2766600/git-archive-of-repository-with-uncommitted-changes) before making an archive.
+- Add support for Windows (Linux and MacOS are both supported).
 - Provide test data and write a beefier test suite.
-- Display progress percentage when running through files.
+- Display progress percentage when running through files and when uploading.
+- Current working directory is used for the temporary file. Investigate: is that approach wise?
+- Allow notifications via Discord.

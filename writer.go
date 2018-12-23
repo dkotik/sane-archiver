@@ -2,10 +2,8 @@ package archiver
 
 import (
 	"archive/zip"
-	"crypto/aes"
 	"crypto/cipher"
 	"crypto/md5"
-	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"hash"
@@ -13,7 +11,6 @@ import (
 	"log"
 	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -23,111 +20,50 @@ var unrootPath = regexp.MustCompile(`^\.*\/+`)
 
 // SaneWriter is a wrapped writer.
 type SaneWriter struct {
-	output        string
+	Output string // Destination file.
+	Result string // Final resting place of the file.
+
+	headerReady   bool
 	size          uint64
 	fileHandle    *os.File
 	cipherHandle  *cipher.StreamWriter
 	archiveHandle *zip.Writer
 	hash          hash.Hash
-	nonce         []byte
 }
 
-// NewWriter returns a cryptographic writer after setting it up.
-func NewWriter(target string, base64PublicKey string) *SaneWriter {
-	w := SaneWriter{output: target}
-	w.nonce = make([]byte, aes.BlockSize)
-	rand.Read(w.nonce)
-	target = fmt.Sprintf("/tmp/%s%c%s~%x.tmp",
-		path.Dir(target), os.PathSeparator, time.Now().Format("2006-01-31"), w.nonce)
-	w.fileHandle = WriteHandle(target)
+// writeHeader prepares everything neccessary for writing the encrypted file.
+func (w *SaneWriter) writeHeader() error {
+	if !w.headerReady {
+		nonce, key, secret := MakeNonceKeySecret(ConfirmKey())
+		target := fmt.Sprintf("%s%c%s~%x.tmp",
+			path.Dir(w.Output), os.PathSeparator,
+			time.Now().Format("2006-01-31"),
+			nonce)
+		w.fileHandle = WriteHandle(target)
 
-	w.hash = md5.New()
-	key := make([]byte, aes.BlockSize)
-	rand.Read(key)
-	fork := io.MultiWriter(w.hash, w.fileHandle)
-	nA, err := fork.Write(w.nonce)
-	if err != nil {
-		log.Fatalf("Unable to write to <%s>.", target)
+		w.hash = md5.New()
+		fork := io.MultiWriter(w.hash, w.fileHandle)
+		nA, err := fork.Write(nonce)
+		if err != nil {
+			log.Fatalf("Unable to write to <%s>.", target)
+		}
+		nB, err := fork.Write(secret)
+		if err != nil {
+			log.Fatalf("Unable to write to <%s>.", target)
+		}
+		w.size = uint64(nA + nB)
+		// TODO: cipher.NewOFB was used before, but that may cause problems with bit-rot.
+		w.cipherHandle = &cipher.StreamWriter{
+			S: cipher.NewCTR(SetupSymmetricCipherBlock(key), nonce), W: fork}
+		w.archiveHandle = zip.NewWriter(w.cipherHandle)
+		w.headerReady = true
 	}
-	nB, err := fork.Write(Encrypt(base64PublicKey, key))
-	if err != nil {
-		log.Fatalf("Unable to write to <%s>.", target)
-	}
-	w.size = uint64(nA + nB)
-	// TODO: cipher.NewOFB was used before, but that may cause problems with bit-rot.
-	w.cipherHandle = &cipher.StreamWriter{
-		S: cipher.NewCTR(SetupSymmetricCipherBlock(key), w.nonce), W: fork}
-	w.archiveHandle = zip.NewWriter(w.cipherHandle)
-	return &w
+	return nil
 }
 
-// func (w *SaneWriter) gitFirstThenRemaining(target string) ([]string, error) {
-// 	nongit := make([]string, 0)
-// 	err := filepath.Walk(target,
-// 		func(file string, info os.FileInfo, err error) error {
-// 			if err == nil && info != nil && info.IsDir() {
-// 				if l, lerr := GitBranchList(file); lerr == nil {
-// 					log.Println(`detected git repository at`, file, l)
-// 					for _, branch := range l {
-// 						cmd, r, gw := GitArchiveReader(file, branch)
-// 						go func() {
-// 							cmd.Run()
-// 							gw.Close()
-// 						}()
-// 						if err = w.addReader(strings.TrimSuffix(file, `.git`)+`-`+branch+`.tar`, &r); err != nil {
-// 							log.Printf("Git repository <%s> could not be accessed.", file)
-// 							return err
-// 						}
-// 						return nil
-// 					}
-// 				} else {
-// 					nongit = append(nongit, file)
-// 				}
-// 			}
-// 			return err
-// 		})
-// 		return nongit, err
-// }
-
-// Walk adds files listed in target path to archive.
-func (w *SaneWriter) Walk(target string) {
-	// if nongit, err := w.gitFirstThenRemaining(target); err == nil {}
-	err := filepath.Walk(target,
-		func(file string, info os.FileInfo, err error) error {
-			if err != nil {
-				log.Printf("Path <%s> could not be accessed.", target)
-				return err
-			} else if info.IsDir() {
-				if l, err := GitBranchList(file); err == nil {
-					log.Println(`detected git repository at`, file, l)
-					for _, branch := range l {
-						cmd, r, gw := GitArchiveReader(file, branch)
-						go func() {
-							cmd.Run()
-							gw.Close()
-						}()
-						if err := w.addReader(strings.TrimSuffix(file, `.git`)+`-`+branch+`.tar`, &r); err != nil {
-							log.Printf("Git repository <%s> could not be accessed.", file)
-							return err
-						}
-						// return nil
-					}
-					return filepath.SkipDir
-				}
-			} else {
-				if err := w.addFile(file); err != nil {
-					log.Printf("File <%s> could not be accessed.", target)
-					return err
-				}
-			}
-			return nil
-		})
-	if err != nil {
-		log.Printf("Directory <%s> could not be fully processed.", target)
-	}
-}
-
-func (w *SaneWriter) addFile(target string) error {
+// AddFile writes target file into the encrypted archive.
+func (w *SaneWriter) AddFile(target string) error {
+	w.writeHeader()
 	in, err := os.Open(target)
 	if err != nil {
 		return err
@@ -142,6 +78,7 @@ func (w *SaneWriter) addFile(target string) error {
 		return err
 	}
 	header.Name = unrootPath.ReplaceAllString(path.Clean(target), "")
+	header.Comment = `Created by sane-archiver.`
 	header.Method = zip.Deflate
 	f, err := w.archiveHandle.CreateHeader(header)
 	if err != nil {
@@ -156,8 +93,18 @@ func (w *SaneWriter) addFile(target string) error {
 	return nil
 }
 
-func (w *SaneWriter) addReader(name string, target *io.Reader) error {
-	f, err := w.archiveHandle.Create(name)
+// AddReader writes contents of provided io.Reader into the archive.
+func (w *SaneWriter) AddReader(name string, target *io.Reader) error {
+	w.writeHeader()
+	header := &zip.FileHeader{
+		Name:     name,
+		Comment:  `Created by sane-archiver.`,
+		Modified: time.Now(),
+		NonUTF8:  false,
+		Method:   zip.Deflate,
+	}
+	// f, err := w.archiveHandle.Create(name)
+	f, err := w.archiveHandle.CreateHeader(header)
 	if err != nil {
 		return err
 	}
@@ -171,13 +118,16 @@ func (w *SaneWriter) addReader(name string, target *io.Reader) error {
 }
 
 // Close function closes the active IO handles and relocates the file.
-func (w *SaneWriter) Close() {
+func (w *SaneWriter) Close() error {
+	if !w.headerReady {
+		log.Fatalf(`No files were added to the archive!`)
+	}
 	oldpath := w.fileHandle.Name()
 	log.Printf("Wrote %.2fGB to <%s>.", float64(w.size)/(1024*1024*1024), oldpath)
 	w.archiveHandle.Close()
 	w.cipherHandle.Close()
 	w.fileHandle.Close()
-	newpath := w.output
+	newpath := w.Output
 	t := time.Now()
 	newpath = strings.Replace(newpath, "{day}", fmt.Sprintf("%d", t.Day()), 1)
 	newpath = strings.Replace(newpath, "{month}", fmt.Sprintf("%d", t.Month()), 1)
@@ -191,4 +141,6 @@ func (w *SaneWriter) Close() {
 		log.Printf("<ERROR> Unable to rename file <%s> to <%s>.", oldpath, newpath)
 	}
 	os.Stdout.WriteString(newpath)
+	w.Result = newpath
+	return nil
 }

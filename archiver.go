@@ -9,6 +9,8 @@ import (
 	"path"
 	"strings"
 	"syscall"
+
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 // flags holds flags
@@ -17,8 +19,10 @@ type flags struct {
 	Keygen  bool
 	Force   bool
 	Dryrun  bool
+	Upload  string
 	Output  string
-	Decrypt string
+	Master  bool
+	Decrypt bool
 	Warn    int
 }
 
@@ -49,6 +53,27 @@ func ConfirmOverwrite(target string) {
 			}
 		}
 	}
+}
+
+// ConfirmKey gathers key from io.Stdin if it is not provided.
+func ConfirmKey() string {
+	if len(Flags.Key) == 0 {
+
+		// reader := bufio.NewReader(os.Stdin)
+		if Flags.Decrypt {
+			fmt.Println(`Please enter private key (-k) to decrypt target archives:`)
+		} else {
+			fmt.Println(`Please enter public key (-k) to create encrypted archive:`)
+		}
+		bytePassword, _ := terminal.ReadPassword(int(syscall.Stdin))
+		fmt.Println(`Key received. Proceeding...`)
+		// input, _ := reader.ReadString('\n')
+		Flags.Key = strings.TrimSpace(string(bytePassword))
+		if len(Flags.Key) == 0 {
+			log.Fatalf(`Cannot perform operations using an empty key.`)
+		}
+	}
+	return Flags.Key
 }
 
 // WriteHandle returns write handle and manages overwrites gracefully.

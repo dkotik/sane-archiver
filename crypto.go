@@ -48,6 +48,16 @@ func GenerateKeyPair() (string, string) {
 		base64.StdEncoding.EncodeToString(mPublic)
 }
 
+// MakeNonceKeySecret returns a random nonce, a random key, and its encrypted variant.
+func MakeNonceKeySecret(base64PublicKey string) ([]byte, []byte, []byte) {
+	key := make([]byte, aes.BlockSize)
+	rand.Read(key)
+	secret := Encrypt(base64PublicKey, key)
+	nonce := make([]byte, aes.BlockSize)
+	rand.Read(nonce)
+	return nonce, key, secret
+}
+
 // Encrypt hides a message using public key.
 func Encrypt(base64PublicKey string, message []byte) []byte {
 	publicKey, err := x509.ParsePKIXPublicKey(FromBase64(base64PublicKey, "public key"))
@@ -57,7 +67,7 @@ func Encrypt(base64PublicKey string, message []byte) []byte {
 	key := publicKey.(*rsa.PublicKey)
 	cipherText, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, key, message, []byte("label"))
 	if err != nil {
-		log.Fatalf("Error encrypting: %s.", err)
+		log.Fatalf("Error encrypting message: %s.", err)
 	}
 	return cipherText
 }
