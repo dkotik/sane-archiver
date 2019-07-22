@@ -64,8 +64,8 @@ func (d SaneDirectoryWalker) Walk(w *SaneWriter) {
 			return nil
 		})
 	if err == nil {
-		d.signal("[DONE] Directory <%s> was fully archived!", target)
+		d.signal(`[DONE] "%s" was fully archived!`, target)
 	} else {
-		d.signal("Directory <%s> could not be fully processed. Reason: %s.", target, err)
+		d.signal(`"%s" could not be fully processed. Reason: %s.`, target, err)
 	}
 }

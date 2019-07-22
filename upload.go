@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -18,6 +19,9 @@ var ErrS3URLError = errors.New(`provided S3 URL does not follow the proper forma
 
 // UploadS3 pushes one file to AWS S3 bucket.
 func UploadS3(file string, URL string) error {
+	if strings.HasSuffix(URL, `/`) {
+		URL += filepath.Base(file)
+	}
 	u, err := url.Parse(URL)
 	if err != nil {
 		return err

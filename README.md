@@ -79,9 +79,11 @@ Features
     are less than 2GB of space remains. You can change the warning threshold by passing
     `--warn [INTEGER]` as a command line argument.
 
-TODO
-----
+Roadmap
+-------
 
+- Update this file with --leave parameter documentation.
+- Check if s3://URL is a directory, UploadS3 function does not work if URL points to a directory.
 - Checksum --md5 command.
 - Support git sub-modules for archiving. Currently they are ignored.
 - [Stash git changes](https://stackoverflow.com/questions/2766600/git-archive-of-repository-with-uncommitted-changes) before making an archive.
@@ -89,4 +91,4 @@ TODO
 - Provide test data and write a beefier test suite.
 - Display progress percentage when running through files and when uploading.
 - Current working directory is used for the temporary file. Investigate: is that approach wise?
-- Allow notifications via Discord.
+- Allow notifications via Discord?

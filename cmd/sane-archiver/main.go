@@ -38,8 +38,9 @@ Options:
  -u, --upload       Upload finished archive to the cloud.
  -f, --force        Overwrite any files that already exist.
  -w, --warn <GB>    Warn if the disk is running low on space.
- -m, --master-only	Archive only master branches of git repositories.
- -n, --dry-run		Display operations without writing.
+ -l, --leave 12		Delete older output-matching files, if more than 12.
+ -m, --master-only  Archive only master branches of git repositories.
+ -n, --dry-run      Display operations without writing.
  -h, --help         Print this message.
 
  Defaults:
@@ -59,15 +60,13 @@ var CLI = &cobra.Command{
 	//         feel free to use a few lines here.
 	//         `,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Check if there are additional sources in STDIN.
-		stat, _ := os.Stdin.Stat()
+		stat, _ := os.Stdin.Stat() // Check if there are additional sources in STDIN.
 		if (stat.Mode() & os.ModeCharDevice) == 0 {
 			scanner := bufio.NewScanner(os.Stdin)
 			for scanner.Scan() {
 				args = append(args, scanner.Text())
 			}
 		}
-
 		if flags.Keygen {
 			private, public := archiver.GenerateKeyPair()
 			fmt.Printf("Private key: %s\nPublic key: %s\n", private, public)
@@ -102,10 +101,15 @@ var CLI = &cobra.Command{
 						log.Printf(`Error uploading %s: %s.`, w.Result, err.Error())
 					}
 				}
+				if v, _ := cmd.PersistentFlags().GetInt(`leave`); v > 0 {
+					err := eliminateAllExcept(flags.Output, v)
+					if err != nil {
+						log.Fatalf(`Error cleaning up: %s.`, err)
+					}
+				}
 			}()
 			for _, arg := range args {
 				walker := archiver.SaneDirectoryWalker(arg)
-				// w.Walk(arg)
 				walker.Walk(w)
 			}
 		}
@@ -127,6 +131,7 @@ func main() {
 		`{year}-{month}-{day}-{md5}.sane1`, `Output to target file or path ({year}-{month}-{day}-{md5}.sane1 is default).`)
 	CLI.PersistentFlags().IntVarP(&flags.Warn, `warn`, `w`, 2,
 		`Warn if the disk is running low on space (default is 2, issuing a warning under 2GB of free space).`)
+	CLI.PersistentFlags().IntP(`leave`, `l`, 0, `Delete older output-matching files, if more than 12.`)
 	CLI.PersistentFlags().BoolVarP(&flags.Master, `master-only`, `m`, false, `Archive only master branches of git repositories.`)
 	// CLI.MarkFlagRequired(`key`)
 	CLI.SetHelpTemplate(fullHelp)
