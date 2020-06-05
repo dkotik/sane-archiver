@@ -35,17 +35,14 @@ func SetupSymmetricCipherBlock(key []byte) cipher.Block {
 }
 
 // GenerateKeyPair returns private and public keys in base64 encoding.
-func GenerateKeyPair() (string, string) {
+func GenerateKeyPair() (string, string, error) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, KeyBytes*8)
 	if err != nil {
-		log.Fatalf("Could not generate a new key pair! Reason: %s.", err)
+		return "", "", err
 	}
 	mPublic, err := x509.MarshalPKIXPublicKey(privateKey.Public())
-	if err != nil {
-		log.Fatalf("Could not generate a new key pair! Reason: %s.", err)
-	}
 	return base64.StdEncoding.EncodeToString(x509.MarshalPKCS1PrivateKey(privateKey)),
-		base64.StdEncoding.EncodeToString(mPublic)
+		base64.StdEncoding.EncodeToString(mPublic), err
 }
 
 // MakeNonceKeySecret returns a random nonce, a random key, and its encrypted variant.

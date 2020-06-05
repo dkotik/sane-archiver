@@ -29,7 +29,11 @@ func Decode(output string, target string, base64PrivateKey string) error {
 	cipherHandle := &cipher.StreamReader{
 		// TODO: cipher.NewOFB was used before, but that may cause problems with bit-rot.
 		S: cipher.NewCTR(SetupSymmetricCipherBlock(Decrypt(base64PrivateKey, key)), nonce), R: in}
-	out := WriteHandle(output)
+
+	out, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		return err
+	}
 	defer out.Close()
 	_, err = io.Copy(out, cipherHandle)
 	if err != nil {

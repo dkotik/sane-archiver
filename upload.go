@@ -34,9 +34,11 @@ func UploadS3(file string, URL string) error {
 	bucketName, keyName := u.Path[:i+1], u.Path[i+1:]
 
 	// user := &u.User
+	retries := 3
 	sess, err := session.NewSession(&aws.Config{
 		Region:      aws.String(u.Host),
 		Credentials: credentials.NewStaticCredentials(u.User.Username(), password, ""),
+		MaxRetries:  &retries,
 	})
 	if err != nil {
 		return ErrS3URLError

@@ -22,37 +22,33 @@ Usage
 -----
 
 ```bash
-sane-archiver --keygen
-sane-archiver --key [PUBLICKEY] [FILE|DIRECTORY]... [OPTION]...
-sane-archiver --key [PRIVATEKEY] --decrypt [SANEFILE]...
-sane-archiver --help
+sane-archiver keygen
+sane-archiver pack [FILE|DIRECTORY]... --key [PUBLICKEY]
+sane-archiver unpack [FILE.sane1]... --key [PRIVATEKEY]
+sane-archiver --help [keygen|pack|unpack]
 ```
 
     Options:
-     -k, --key <KEY>    Set private or public base64-encoded key.
-         --keygen       Generate a base64-encoded keypair.
      -o, --output       Output to this file or path.
-     -d, --decrypt      Decrypt all provided files.
      -f, --force        Overwrite any files that already exist.
      -w, --warn <GB>    Warn if the disk is running low on space.
-     -m, --master-only	Archive only master branches of git repositories.
-     -n, --dry-run		Display operations without writing.
-     -h, --help         Print this message.
+     -l, --leave <X>    Delete all *.sane1 files except X most
+                        modified most recently.
 
      Defaults:
        --output defaults to {year}-{month}-{day}-{md5}.[sane1|zip]
        --key [PUBLICKEY] defaults to $ENV[SaneArchiverPublicKey]
        --warn defaults to 2, issuing a warning under 2GB of free space
 
-The path to newly created archive is printed into os.Stdout. The log of the creation proccess and any warnings or errors are printed into os.Stderr. This simplifies the creation of recipes that log to a certain file or notify you by email when archives are created or upload created files:
+<!-- The path to newly created archive is printed into os.Stdout. The log of the creation process and any warnings or errors are printed into os.Stderr. This simplifies the creation of recipes that log to a certain file or notify you by email when archives are created or upload created files:
 
 ```bash
 sane-archiver --key [PUBLICKEY] [FILE|DIRECTORY] 2>>report.log
 sane-archiver --key [PUBLICKEY] [FILE|DIRECTORY] 2>>&1 | tee report.log | mail -s "Email subject" me@mymail.com
 sane-archiver --key [PUBLICKEY] [FILE|DIRECTORY] 2>>report.log && aws s3 [DIRECTORY] sync s3://bucket...
-```
+``` -->
 
-**Pro tip:** If you type one space character before running a terminal command, that command will not be recorded in bash history. This can help protect your keys from prying eyes.
+**Pro tip:** If you type one space character before running a terminal command, that command will not be recorded in your bash history. This can help protect your keys from prying eyes.
 
 Features
 --------
@@ -82,13 +78,16 @@ Features
 Roadmap
 -------
 
-- Update this file with --leave parameter documentation.
-- Check if s3://URL is a directory, UploadS3 function does not work if URL points to a directory.
+- Check if s3://URL is a directory, UploadS3 does not work if URL points to a directory.
 - Checksum --md5 command.
 - Support git sub-modules for archiving. Currently they are ignored.
 - [Stash git changes](https://stackoverflow.com/questions/2766600/git-archive-of-repository-with-uncommitted-changes) before making an archive.
 - Add support for Windows (Linux and MacOS are both supported).
-- Provide test data and write a beefier test suite.
 - Display progress percentage when running through files and when uploading.
-- Current working directory is used for the temporary file. Investigate: is that approach wise?
-- Allow notifications via Discord?
+
+License
+-------
+
+Sane Archiver is distributed under Apache License. The author would also like to add the SQLite blessing:
+
+> May you do good and not evil. May you find forgiveness for yourself and forgive others. May you share freely, never taking more than you give.

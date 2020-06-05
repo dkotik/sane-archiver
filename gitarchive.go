@@ -34,14 +34,6 @@ func GitBranchList(path string) ([]string, error) {
 	if len(result) == 0 {
 		return result, fmt.Errorf(`path <%s> does not appear to be a git folder`, path)
 	}
-	if Flags.Master {
-		for _, branch := range result {
-			if branch == `master` {
-				return []string{`master`}, nil
-			}
-		}
-		return []string{}, fmt.Errorf(`repository <%s> does not have a master branch`, path)
-	}
 	return result, nil
 }
 

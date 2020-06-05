@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"crypto/cipher"
 	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"hash"
 	"io"
@@ -12,7 +11,6 @@ import (
 	"os"
 	"path"
 	"regexp"
-	"strings"
 	"time"
 )
 
@@ -20,50 +18,50 @@ var unrootPath = regexp.MustCompile(`^\.*\/+`)
 
 // SaneWriter is a wrapped writer.
 type SaneWriter struct {
-	Output string // Destination file.
-	Result string // Final resting place of the file.
+	Writer    io.Writer
+	PublicKey string // Base64-encoded public key used for encryption.
+	Hash      hash.Hash
+	Size      uint64
 
 	headerReady   bool
-	size          uint64
-	fileHandle    *os.File
 	cipherHandle  *cipher.StreamWriter
 	archiveHandle *zip.Writer
-	hash          hash.Hash
 }
 
 // writeHeader prepares everything neccessary for writing the encrypted file.
-func (w *SaneWriter) writeHeader() error {
+func (w *SaneWriter) writeHeader() (err error) {
 	if !w.headerReady {
-		nonce, key, secret := MakeNonceKeySecret(ConfirmKey())
-		target := fmt.Sprintf("%s%c%s~%x.tmp",
-			path.Dir(w.Output), os.PathSeparator,
-			time.Now().Format("2006-01-31"),
-			nonce)
-		w.fileHandle = WriteHandle(target)
-
-		w.hash = md5.New()
-		fork := io.MultiWriter(w.hash, w.fileHandle)
+		if len(w.PublicKey) == 0 {
+			return fmt.Errorf(`cannot perform operations using an empty key`)
+		}
+		nonce, key, secret := MakeNonceKeySecret(w.PublicKey)
+		w.Hash = md5.New()
+		fork := io.MultiWriter(w.Hash, w.Writer)
 		nA, err := fork.Write(nonce)
 		if err != nil {
-			log.Fatalf("Unable to write to <%s>.", target)
+			return err
 		}
 		nB, err := fork.Write(secret)
 		if err != nil {
-			log.Fatalf("Unable to write to <%s>.", target)
+			return err
 		}
-		w.size = uint64(nA + nB)
+
+		w.Size = uint64(nA + nB)
 		// TODO: cipher.NewOFB was used before, but that may cause problems with bit-rot.
 		w.cipherHandle = &cipher.StreamWriter{
 			S: cipher.NewCTR(SetupSymmetricCipherBlock(key), nonce), W: fork}
 		w.archiveHandle = zip.NewWriter(w.cipherHandle)
 		w.headerReady = true
 	}
-	return nil
+	return err
 }
 
 // AddFile writes target file into the encrypted archive.
-func (w *SaneWriter) AddFile(target string) error {
-	w.writeHeader()
+func (w *SaneWriter) AddFile(target string) (err error) {
+	err = w.writeHeader()
+	if err != nil {
+		return err
+	}
 	in, err := os.Open(target)
 	if err != nil {
 		return err
@@ -88,14 +86,17 @@ func (w *SaneWriter) AddFile(target string) error {
 	if err != nil {
 		return err
 	}
-	w.size += uint64(n)
+	w.Size += uint64(n)
 	log.Printf("File <%s> was added.", target)
 	return nil
 }
 
 // AddReader writes contents of provided io.Reader into the archive.
-func (w *SaneWriter) AddReader(name string, target *io.Reader) error {
-	w.writeHeader()
+func (w *SaneWriter) AddReader(name string, target *io.Reader) (err error) {
+	err = w.writeHeader()
+	if err != nil {
+		return err
+	}
 	header := &zip.FileHeader{
 		Name:     name,
 		Comment:  `Created by sane-archiver.`,
@@ -112,7 +113,7 @@ func (w *SaneWriter) AddReader(name string, target *io.Reader) error {
 	if err != nil {
 		return err
 	}
-	w.size += uint64(n)
+	w.Size += uint64(n)
 	log.Printf("File <%s> was added.", name)
 	return nil
 }
@@ -122,25 +123,6 @@ func (w *SaneWriter) Close() error {
 	if !w.headerReady {
 		log.Fatalf(`No files were added to the archive!`)
 	}
-	oldpath := w.fileHandle.Name()
-	log.Printf("Wrote %.2fGB to <%s>.", float64(w.size)/(1024*1024*1024), oldpath)
 	w.archiveHandle.Close()
-	w.cipherHandle.Close()
-	w.fileHandle.Close()
-	newpath := w.Output
-	t := time.Now()
-	newpath = strings.Replace(newpath, "{day}", fmt.Sprintf("%d", t.Day()), 1)
-	newpath = strings.Replace(newpath, "{month}", fmt.Sprintf("%d", t.Month()), 1)
-	newpath = strings.Replace(newpath, "{year}", fmt.Sprintf("%d", t.Year()), 1)
-	newpath = strings.Replace(newpath, "{md5}", hex.EncodeToString(w.hash.Sum(nil)), 1)
-	ConfirmOverwrite(newpath)
-	err := os.Rename(oldpath, newpath)
-	if err == nil {
-		log.Printf("Wrote %.2fGB to <%s>.", float64(w.size)/(1024*1024*1024), newpath)
-	} else {
-		log.Printf("<ERROR> Unable to rename file <%s> to <%s>.", oldpath, newpath)
-	}
-	os.Stdout.WriteString(newpath)
-	w.Result = newpath
-	return nil
+	return w.cipherHandle.Close()
 }
