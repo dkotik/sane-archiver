@@ -6,11 +6,9 @@ import (
 
 const (
 	encodingEscapeRune     = '\\'
+	encodingBoundaryRune   = ':'
 	encodingTelomereRune   = '|'
 	encodingTelomereLength = 8
-	encodingBoundaryRune   = ':'
-
-	shardLimit = 256
 )
 
 // StreamBlocks decodes the first block from the reader and pipes it into the buffer.
