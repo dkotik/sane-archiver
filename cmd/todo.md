@@ -1,13 +1,18 @@
+- https://github.com/kudelskisecurity/crystals-go !!!!!!!!!!! and vendor it
+- Message pack is a good serialization protocol: https://msgpack.org/
+
 # Big Two: Remove SHA-1 (it is broken) | I think I already removed it for sha256
+
 - Logging --log + Progress bar with either of
-    - https://github.com/schollz/progressbar (preferred)
-    - https://github.com/cheggaaa/pb
+  - https://github.com/schollz/progressbar (preferred)
+  - https://github.com/cheggaaa/pb
 - [x] fixed: created files were executable!
 - Currently gets hopelessly stuck if s3 connection is interrupted - needs to display progress and use timeout wisely with re-tries
 - is rand. properly seeded!
 - Current working directory is used for the temporary file. Investigate: is that approach wise?
 
 # Big One: Remove RSA
+
 _<https://blog.trailofbits.com/2019/07/08/fuck-rsa/>_
 
 Here at Trail of Bits we review a lot of code. From major open source
@@ -43,6 +48,17 @@ explainer](https://crypto.stackexchange.com/questions/12688/can-you-explain-blei
 
 TLS 1.3 no longer supports RSA so we can expect to see fewer of these attacks going forward, but as long as developers continue to use RSA in their own applications there will be padding oracle attacks.
 
+# Error-Correcting Codes
+
+- Keeping a hash of a byte string can allow re-building the string by random iteration until the value matches the hash.
+- Hashing byte sets that are already ECC-hashed allows double-checking for errors by parent. Solve the first hash, check the solution against parent - no match - look for a second solution.
+- This prevents ECC hashes themselves from being bit-rot - they could lay in a duplicate tree even as a separate file.
+- https://innovation.vivint.com/introduction-to-reed-solomon-bc264d0794f8
+  - https://github.com/maruel/rs
+  - https://github.com/vivint/infectious
+  - https://github.com/klauspost/reedsolomon
+- http://blog.klauspost.com/blazingly-fast-reed-solomon-coding/
+
 ## Replacement
 
 Trail of Bits recommends using
@@ -60,7 +76,9 @@ and is [available for most
 languages](https://libsodium.gitbook.io/doc/libsodium_users).
 
 ## Considerations
+
 - https://github.com/jesseduffield/horcrux
 - see how restic · Backups done right! https://restic.net/ does it
 - also similar: https://github.com/FiloSottile/age
-- zstd might be the best compression as ArchLinux switched to it recently: zstd and xz trade blows in their compression ratio. Recompressing all packages to zstd with our options yields a total ~0.8% increase in package size on all of our packages combined, but the decompression time for all packages saw a ~1300% speedup.
+- Peer Keep looks like a bunch of libraries to do everything I do: https://github.com/perkeep/perkeep
+- zstd (ZStandard, developed by Facebook) might be the best compression as ArchLinux switched to it recently: zstd and xz trade blows in their compression ratio. Recompressing all packages to zstd with our options yields a total ~0.8% increase in package size on all of our packages combined, but the decompression time for all packages saw a ~1300% speedup.
