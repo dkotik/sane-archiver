@@ -6,8 +6,7 @@ import (
 
 const (
 	encodingEscapeRune     = '\\'
-	encodingBoundaryRune   = ':'
-	encodingTelomereRune   = '|'
+	encodingTelomereRune   = ':'
 	encodingTelomereLength = 8
 )
 

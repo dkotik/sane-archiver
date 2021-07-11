@@ -2,8 +2,8 @@ package armor
 
 import (
 	"bytes"
+	"fmt"
 	"hash/crc32"
-	"io"
 )
 
 const (
@@ -15,60 +15,59 @@ const (
 
 // Block is a minimal unit of the armored file.
 type Block struct {
-	Shard    [blockSize]byte
-	Order    uint8
-	Checksum [blockHashSize]byte
-	length   int
+	Body   [blockSize + MetaTagTotalLength]byte
+	Length int
+	Index  int
 }
 
-// NewBlock creates a valid block using the contents of the provided reader.
-func NewBlock(order uint8, r io.Reader) (b *Block, err error) {
-	b = &Block{order: order}
-	var n int
-
-	for n, err = r.Read(b.Shard[:blockSize]); ; n, err = r.Read(b.Shard[b.length:blockSize]) {
-		b.length += n
-		if err != nil {
-			if err != io.EOF {
-				return nil, err
-			}
-			break
-		}
-	}
-	copy(b.Shard[b.length:blockHashSize], Hash(b.Shard[:b.length]))
-	b.length += blockHashSize
+// Write ignores any additional data written past the available byte space.
+func (b *Block) Write(data []byte) (n int, err error) {
+	n = copy(b.Body[b.Length:], data)
+	b.Length += n
 	return
 }
 
-// Bytes returns the proper slice of bytes representing its contents. Must be called after the block was validated!
-func (b *Block) Bytes() []byte {
-	return b.Shard[:b.length-blockHashSize]
+// Seal writes meta tag bytes to the tail. Adds a full checksum to the very end.
+func (b *Block) Seal(withMetaTag []byte) {
+	copy(b.Body[blockSize-MetaTagTotalLength:], withMetaTag)
+	copy(b.Body[blockSize-blockHashSize:],
+		ChecksumCompute(b.Body[:blockSize-blockHashSize]))
+	// version|sequence|required|redundant|padding|checksum
+	// metaTagPositionVersionNumber   = 0
+	// metaTagPositionSequenceNumber  = metaTagPositionVersionNumber + blockHashSize
+	// metaTagPositionRequiredShards  = metaTagPositionVersionNumber + 1
+	// metaTagPositionRedundantShards = metaTagPositionRequiredShards + 1
+	// metaTagPositionPaddingLength   = metaTagPositionRedundantShards + 1
+	// metaTagPositionChecksum        = metaTagPositionPaddingLength + 2
 }
 
 // IsValid returns true if the hash value matches the body.
 func (b *Block) IsValid() bool {
-	l := b.length
-	if l <= blockHashSize {
-		return false
-	}
 	return 0 == bytes.Compare(
-		b.Shard[l-blockHashSize:l],
-		Hash(b.Shard[:l]))
+		b.Body[blockSize:], ChecksumCompute(b.Body[:blockSize]))
 }
 
-// IsBoundary returns true if the block is small and contains many encodingBoundaryRunes. Boundary blocks are always invalid, because they do not contain a hash
-func (b *Block) IsBoundary() bool {
-	if b.length > encodingTelomereLength+4 {
-		return false
-	}
-	var boundaryCount uint8
-	for i := 0; i < b.length; i++ {
-		if b.Shard[i] == encodingBoundaryRune {
-			boundaryCount++
-			if boundaryCount > 6 {
-				return true
-			}
-		}
-	}
-	return false
+// IsSibling returns true if two blocks found next to each other belong together.
+func (b *Block) IsSibling(a *Block) bool {
+	// if the sequence number is lower
+	return b.Body[blockSize+metaTagPositionSequenceNumber] >= a.Body[blockSize+metaTagPositionSequenceNumber]
+}
+
+// // Bytes returns the proper slice of bytes representing its contents.
+// func (b *Block) Bytes() []byte {
+// 	return b.Body[:b.Length]
+// }
+
+// // IsCrossCheck returns true if the block is small and contains many encodingBoundaryRunes. Boundary blocks are always invalid, because they do not contain a hash
+// func (b *Block) IsCrossCheck() bool {
+// 	if b.Length < blockHashSize * 3 {
+// 		return false
+// 	}
+// 	return false
+// }
+
+func (b *Block) String() string {
+	return fmt.Sprintf("Block#%x@%d-%d",
+		b.Body[blockSize+metaTagPositionChecksum:blockSize+metaTagPositionChecksum+blockHashSize],
+		b.Index, b.Index+b.Length) // byte range within the file
 }
